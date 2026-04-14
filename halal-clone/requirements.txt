@@ -1,0 +1,13 @@
+discord.py
+flask
+aiohttp
+firebase-admin
+eth-account
+base58
+bit
+bitcoinlib
+cryptography
+Pillow
+qrcode[pil]
+websockets
+requests
