@@ -503,16 +503,39 @@ def _gen_btc() -> tuple[str, str]:
         return addr, priv.hex()
 
 def _gen_ltc() -> tuple[str, str]:
-    try:
-        from bitcoinlib.wallets import Wallet
-        import uuid
-        w = Wallet.create(f'ltc_{uuid.uuid4().hex[:8]}', network='litecoin')
-        k = w.get_key(); return k.address, k.wif
-    except Exception:
-        import base58 as b58, hashlib
-        priv = secrets.token_bytes(32)
-        addr = 'L' + b58.b58encode(hashlib.sha256(priv).digest()[:20]).decode()[:25]
-        return addr, priv.hex()
+    import hashlib
+    import base58
+
+    private_key_bytes = secrets.token_bytes(32)
+
+    extended_key = b'\xb0' + private_key_bytes + b'\x01'
+    sha256_1 = hashlib.sha256(extended_key).digest()
+    sha256_2 = hashlib.sha256(sha256_1).digest()
+    checksum = sha256_2[:4]
+    wif = base58.b58encode(extended_key + checksum).decode()
+
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = ec.derive_private_key(
+        int.from_bytes(private_key_bytes, 'big'),
+        ec.SECP256K1()
+    )
+    public_key = private_key.public_key()
+    public_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+
+    sha = hashlib.sha256(public_bytes).digest()
+    ripemd = hashlib.new('ripemd160', sha).digest()
+
+    versioned_payload = b'\x30' + ripemd
+
+    checksum = hashlib.sha256(hashlib.sha256(versioned_payload).digest()).digest()[:4]
+    address = base58.b58encode(versioned_payload + checksum).decode()
+
+    return address, wif
 
 # ─── QR CODE ─────────────────────────────────────────────────
 
